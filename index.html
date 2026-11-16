@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>micro:bit 积木编程</title>
+  </head>
+  <body>
+    <main>
+      <section class="editor" aria-labelledby="workspace-label">
+        <div class="panel-heading workspace-heading">
+          <h1 id="workspace-label">积木工作区</h1>
+          <button id="run" type="button">▶ 运行预览</button>
+        </div>
+        <div id="workspace"></div>
+      </section>
+      <aside>
+        <section class="panel" aria-labelledby="display-label">
+          <h2 id="display-label">点阵预览</h2>
+          <div id="matrix" role="img" aria-label="点阵已熄灭"></div>
+          <p id="status" role="status">点击「运行预览」点亮图案。</p>
+        </section>
+        <section class="panel code" aria-labelledby="code-label">
+          <div class="panel-heading">
+            <h2 id="code-label">MicroPython</h2>
+            <button id="download" type="button">下载 .py</button>
+          </div>
+          <pre><code id="python"></code></pre>
+        </section>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
