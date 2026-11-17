@@ -1,6 +1,6 @@
 import { CollapsibleToolboxCategory, registry, ToolboxCategory } from 'blockly/core';
 import {
-  faCode, faCalculator, faCodeBranch, faCube, faEquals, faFont, faListUl, faMicrochip, faRotateRight, faDisplay, faWifi,
+  faCode, faCalculator, faCodeBranch, faCube, faEquals, faFont, faListUl, faMicrochip, faRotateRight, faDisplay, faWifi, faPlug, faHandPointer, faClock,
 } from '@fortawesome/free-solid-svg-icons';
 import { t } from './i18n.js';
 
@@ -76,38 +76,68 @@ export function createToolbox() {
       ]),
       category(t('text'), '%{BKY_TEXTS_HUE}', faFont, [
         'text', 'text_join', 'text_length', 'text_isEmpty', 'text_changeCase',
+        { type: 'text_print', inputs: { TEXT: textInput('Hello') } },
       ]),
       category(t('lists'), '%{BKY_LISTS_HUE}', faListUl, [
         'lists_create_with', 'lists_length', 'lists_isEmpty',
       ]),
       { kind: 'iconCategory', name: t('variables'), icon: faEquals, colour: '%{BKY_VARIABLES_HUE}', custom: 'VARIABLE' },
       { kind: 'iconCategory', name: t('functions'), icon: faCube, colour: '%{BKY_PROCEDURES_HUE}', custom: 'PROCEDURE' },
-      category('Python', '#3575a6', faCode, [
+      category(t('modules'), '#3575a6', faCode, [
         'python_import', 'python_from_import', 'python_name', 'python_member',
         'python_call', 'python_call_statement', 'python_argument', 'python_keyword_argument',
       ]),
-      category('Micro:bit', '#b05039', faMicrochip, [
+      category(t('timing'), '#94722a', faClock, [
+        { type: 'timing_wait_ms', inputs: { MS: numberInput(100) } },
+        'timing_ticks_ms',
         {
-          type: 'microbit_set_pixel',
-          inputs: { X: numberInput(0), Y: numberInput(0), BRIGHTNESS: numberInput(9) },
+          type: 'timing_elapsed_ms',
+          inputs: { START: numberInput(0), END: { shadow: { type: 'timing_ticks_ms' } } },
         },
-        { type: 'microbit_get_pixel', inputs: { X: numberInput(0), Y: numberInput(0) } },
-        'microbit_clear_display',
       ]),
+      category(t('gpio'), '#29806c', faPlug, [
+        { type: 'gpio_read_digital', inputs: { PIN: numberInput(0) } },
+        { type: 'gpio_write_digital', inputs: { PIN: numberInput(0) } },
+        { type: 'gpio_read_adc', inputs: { PIN: numberInput(0) } },
+        { type: 'gpio_on_edge', inputs: { PIN: numberInput(0) } },
+      ]),
+      {
+        kind: 'iconCategoryGroup',
+        icon: faMicrochip,
+        name: 'Micro:bit',
+        colour: '#b05039',
+        contents: [
+          category(t('display'), '#b05039', faDisplay, [
+            {
+              type: 'microbit_set_pixel',
+              inputs: { X: numberInput(0), Y: numberInput(0), BRIGHTNESS: numberInput(9) },
+            },
+            { type: 'microbit_get_pixel', inputs: { X: numberInput(0), Y: numberInput(0) } },
+            'microbit_clear_display',
+          ]),
+          category(t('pins'), '#b05039', faPlug, [
+            'microbit_read_digital', 'microbit_write_digital', 'microbit_read_analog',
+          ]),
+          category(t('buttons'), '#b05039', faHandPointer, [
+            'microbit_on_button_pressed', 'microbit_button_is_pressed', 'microbit_button_was_pressed', 'microbit_button_press_count',
+          ]),
+        ],
+      },
       {
         kind: 'iconCategoryGroup',
         icon: faMicrochip,
         name: 'Matrix:bit',
         colour: '#745ba5',
         contents: [
-          category('OLED', '#745ba5', faDisplay, [
+          category(t('display'), '#745ba5', faDisplay, [
             {
               type: 'matrixbit_oled_text',
               inputs: { TEXT: textInput('Hello'), X: numberInput(0), Y: numberInput(0) },
             },
             { type: 'matrixbit_oled_pixel', inputs: { X: numberInput(0), Y: numberInput(0) } },
-            'matrixbit_oled_clear',
+            'matrixbit_oled_clear', 'matrixbit_oled_flush',
           ]),
+          category(t('buttons'), '#745ba5', faHandPointer, ['matrixbit_on_button_pressed', 'matrixbit_button_is_pressed']),
           category('Wi-Fi', '#357d82', faWifi, [
             {
               type: 'matrixbit_wifi_connect',

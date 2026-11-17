@@ -37,10 +37,41 @@ button:disabled { opacity: .45; cursor: default; }
 }
 #python:focus-visible { outline: 2px solid #8979d1; outline-offset: -2px; }
 
+.serial-panel {
+  display: flex;
+  flex: 0 1 35%;
+  flex-direction: column;
+  min-height: 100px;
+  border-top: 1px solid #dcd9ed;
+}
+.serial-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+}
+.serial-heading h3 { margin: 0; font-size: .875rem; }
+.serial-heading button { padding: 5px 8px; background: #eee9ff; color: #473779; font-size: .8125rem; }
+#serial-status { margin: 0; padding: 0 12px 6px; font-size: .75rem; overflow-wrap: anywhere; }
+#serial-output {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  background: #f5f3fa;
+  font: .8125rem/1.5 "IBM Plex Mono", ui-monospace, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#serial-output:focus-visible { outline: 2px solid #8979d1; outline-offset: -2px; }
+
 @media (max-width: 760px) {
   body { height: auto; min-height: 100dvh; }
   main { grid-template-columns: minmax(0, 1fr); }
   .panel { height: 58dvh; }
+  .panel[aria-labelledby="code-label"] { min-height: 360px; }
 }
 
 #workspace .blocklyToolbox {

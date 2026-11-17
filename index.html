@@ -28,6 +28,17 @@
         </div>
         <textarea id="python" aria-labelledby="code-label" spellcheck="false"
           autocapitalize="off" autocomplete="off" wrap="off"></textarea>
+        <section class="serial-panel" aria-labelledby="serial-label">
+          <div class="serial-heading">
+            <h3 id="serial-label" data-i18n="serialOutput">Serial output</h3>
+            <div class="code-actions">
+              <button id="serial-connect" type="button" disabled>Connect</button>
+              <button id="serial-clear" type="button" data-i18n="serialClear" disabled>Clear</button>
+            </div>
+          </div>
+          <p id="serial-status" role="status"></p>
+          <pre id="serial-output" aria-labelledby="serial-label" tabindex="0"></pre>
+        </section>
       </section>
     </main>
     <script type="module" src="/src/main.js"></script>

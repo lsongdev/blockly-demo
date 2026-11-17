@@ -7,8 +7,10 @@ import { PythonBlockError } from './python-blocks.js';
 import './matrixbit.js';
 import './matrixbit-wifi.js';
 import './microbit.js';
+import './gpio.js';
+import './timing.js';
 import { example } from './example.js';
-import { downloadProgram, MicroPythonError } from './micropython.js';
+import { downloadProgram, MicroPythonError, monitorPort } from './micropython.js';
 import './style.css';
 
 let language = getSavedLanguage();
@@ -30,21 +32,58 @@ const useBlockCode = document.querySelector('#use-block-code');
 const download = document.querySelector('#download');
 const upload = document.querySelector('#upload');
 const uploadStatus = document.querySelector('#upload-status');
-let uploading = false;
+const serialConnect = document.querySelector('#serial-connect');
+const serialClear = document.querySelector('#serial-clear');
+const serialStatus = document.querySelector('#serial-status');
+const serialOutput = document.querySelector('#serial-output');
+const serialOutputLimit = 32_768;
+let serialBusy = false;
+let serialSession;
+let serialMessage = ['serialDisconnected'];
 let generatedCode = null;
 let manuallyEdited = false;
 let uploadMessage;
 
-function renderUploadStatus() {
-  if (!uploadMessage) return;
-  const [key, error] = uploadMessage;
+function renderStatus(element, message) {
+  if (!message) return;
+  const [key, error] = message;
   const detail = error instanceof MicroPythonError ? t(error.code) : error?.message;
-  uploadStatus.textContent = t(key, detail);
+  element.textContent = t(key, detail);
 }
 
 function setUploadStatus(key, error) {
   uploadMessage = [key, error];
-  renderUploadStatus();
+  renderStatus(uploadStatus, uploadMessage);
+}
+
+function setSerialStatus(key, error) {
+  serialMessage = [key, error];
+  renderStatus(serialStatus, serialMessage);
+}
+
+function appendSerialOutput(text) {
+  const atBottom = serialOutput.scrollHeight - serialOutput.clientHeight - serialOutput.scrollTop <= 2;
+  serialOutput.textContent = (serialOutput.textContent + text).slice(-serialOutputLimit);
+  if (atBottom) serialOutput.scrollTop = serialOutput.scrollHeight;
+  serialClear.disabled = false;
+}
+
+function attachSerial(session) {
+  serialSession = session;
+  setSerialStatus('serialConnected');
+  const ended = (error) => {
+    if (serialSession !== session) return;
+    serialSession = undefined;
+    setSerialStatus(error ? 'serialFailed' : 'serialDisconnected', error);
+    updateButtons();
+  };
+  session.done.then(() => ended(), ended);
+}
+
+async function detachSerial() {
+  const session = serialSession;
+  serialSession = undefined;
+  await session?.close();
 }
 
 function renderLanguage() {
@@ -55,7 +94,8 @@ function renderLanguage() {
   document.querySelectorAll('[data-i18n-title]').forEach(element => {
     element.title = t(element.dataset.i18nTitle);
   });
-  renderUploadStatus();
+  renderStatus(uploadStatus, uploadMessage);
+  renderStatus(serialStatus, serialMessage);
 }
 
 window.setLanguage = (requested, { persist = true } = {}) => {
@@ -76,7 +116,9 @@ window.setLanguage = (requested, { persist = true } = {}) => {
 
 function updateButtons() {
   download.disabled = !code.value.trim();
-  upload.disabled = download.disabled || uploading || !navigator.serial;
+  upload.disabled = download.disabled || serialBusy || !navigator.serial;
+  serialConnect.disabled = serialBusy || !navigator.serial;
+  serialConnect.textContent = t(serialSession ? 'serialDisconnect' : 'serialConnect');
   codeSync.hidden = !manuallyEdited;
   useBlockCode.disabled = generatedCode === null;
 }
@@ -126,21 +168,53 @@ download.addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
+serialClear.addEventListener('click', () => {
+  serialOutput.textContent = '';
+  serialClear.disabled = true;
+});
+
+serialConnect.addEventListener('click', async () => {
+  serialBusy = true;
+  updateButtons();
+  try {
+    if (serialSession) {
+      await detachSerial();
+      setSerialStatus('serialDisconnected');
+    } else {
+      setSerialStatus('selectPort');
+      const port = await navigator.serial.requestPort();
+      attachSerial(await monitorPort(port, appendSerialOutput));
+    }
+  } catch (error) {
+    setSerialStatus(error.name === 'NotFoundError' ? 'portCanceled' : 'serialFailed', error);
+  } finally {
+    serialBusy = false;
+    updateButtons();
+  }
+});
+
 upload.addEventListener('click', async () => {
   const source = code.value;
-  uploading = true;
+  serialBusy = true;
   updateButtons();
-  setUploadStatus('selectPort');
   try {
-    const port = await navigator.serial.requestPort();
+    let port = serialSession?.port;
+    if (port) {
+      await detachSerial();
+    } else {
+      setUploadStatus('selectPort');
+      port = await navigator.serial.requestPort();
+    }
+    setSerialStatus('serialConnecting');
     setUploadStatus('writingCode');
-    await downloadProgram(port, source);
+    attachSerial(await downloadProgram(port, source, appendSerialOutput));
     setUploadStatus('flashComplete');
   } catch (error) {
+    setSerialStatus('serialDisconnected');
     if (error.name === 'NotFoundError') setUploadStatus('portCanceled');
     else setUploadStatus('flashFailed', error);
   } finally {
-    uploading = false;
+    serialBusy = false;
     updateButtons();
   }
 });
