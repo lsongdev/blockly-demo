@@ -1,17 +1,19 @@
 import * as Blockly from 'blockly/core';
 import 'blockly/blocks';
 import { pythonGenerator } from 'blockly/python';
-import { createToolbox } from './toolbox.js';
+import { createToolbox, EditorToolbox } from './toolbox.js';
 import { applyLanguage, getSavedLanguage, normalizeLanguage, saveLanguage, t } from './i18n.js';
 import { PythonBlockError } from './python-blocks.js';
 import './matrixbit.js';
 import './matrixbit-wifi.js';
 import './microbit.js';
 import './gpio.js';
+import './output-blocks.js';
+import './bus-blocks.js';
 import './timing.js';
 import { example } from './example.js';
-import { createProject, parseProject, ProjectError, readAutosave, writeAutosave } from './project.js';
-import { downloadProgram, MicroPythonError, monitorPort } from './micropython.js';
+import { createProject, isLibraryFilename, parseProject, ProjectError, readAutosave, writeAutosave } from './project.js';
+import { downloadProgram, manageDeviceFiles, MicroPythonError, monitorPort } from './micropython.js';
 import './style.css';
 
 let language = getSavedLanguage();
@@ -19,9 +21,96 @@ applyLanguage(language);
 
 const workspace = Blockly.inject('workspace', {
   toolbox: createToolbox(),
+  plugins: { toolbox: EditorToolbox },
   trashcan: true,
   scrollbars: true,
   grid: { spacing: 24, length: 2, colour: '#b8bcd2' },
+});
+
+const filesPanel = document.querySelector('#files-panel');
+const librariesPanel = document.querySelector('#libraries-panel');
+const libraryInput = document.querySelector('#library-file');
+const libraryList = document.querySelector('#library-list');
+const librariesStatus = document.querySelector('#libraries-status');
+let libraries = [];
+let librariesMessage;
+const localDeviceFile = document.querySelector('#local-device-file');
+const refreshFiles = document.querySelector('#refresh-files');
+const addFile = document.querySelector('#add-file');
+const filesParent = document.querySelector('#files-parent');
+const filesPath = document.querySelector('#files-path');
+const fileList = document.querySelector('#device-file-list');
+const filesStatus = document.querySelector('#device-files-status');
+let deviceListing;
+let filesMessage;
+let filesBusy = false;
+
+function syncToolboxPanels() {
+  const toolbox = workspace.getToolbox();
+  const selected = toolbox.getSelectedItem()?.getId();
+  filesPanel.hidden = selected !== 'files';
+  librariesPanel.hidden = selected !== 'libraries';
+  const container = filesPanel.parentElement;
+  container.style.setProperty('--toolbox-width', `${toolbox.getWidth()}px`);
+  const flyoutBackground = workspace.getInjectionDiv().querySelector('.blocklyFlyoutBackground');
+  if (flyoutBackground) {
+    const { fill, fillOpacity } = getComputedStyle(flyoutBackground);
+    container.style.setProperty('--flyout-fill', fill);
+    container.style.setProperty('--flyout-opacity', fillOpacity);
+  }
+  filesPanel.setAttribute('aria-label', t('files'));
+}
+
+workspace.addChangeListener(event => {
+  if (event.type === Blockly.Events.TOOLBOX_ITEM_SELECT) syncToolboxPanels();
+});
+function renderLibraries() {
+  librariesStatus.textContent = librariesMessage ? t(librariesMessage)
+    : libraries.length === 0 ? t('librariesEmpty') : '';
+  libraryList.replaceChildren();
+  for (const library of libraries) {
+    const row = document.createElement('li');
+    const filename = document.createElement('code');
+    filename.textContent = library.name;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = t('libraryRemove');
+    remove.addEventListener('click', () => {
+      libraries = libraries.filter(file => file !== library);
+      librariesMessage = undefined;
+      renderLibraries();
+      saveLocally();
+    });
+    row.append(filename, remove);
+    libraryList.append(row);
+  }
+}
+
+document.querySelector('#add-library').addEventListener('click', () => libraryInput.click());
+libraryInput.addEventListener('change', async () => {
+  const file = libraryInput.files[0];
+  libraryInput.value = '';
+  if (!file) return;
+  librariesMessage = undefined;
+  if (!isLibraryFilename(file.name)) {
+    librariesMessage = 'libraryInvalidName';
+    renderLibraries();
+    return;
+  }
+  const currentLibraries = libraries;
+  try {
+    const source = await file.text();
+    if (currentLibraries !== libraries) return;
+    const existing = libraries.find(library => library.name.toLowerCase() === file.name.toLowerCase());
+    if (existing && !window.confirm(t('libraryReplace', existing.name))) return;
+    const library = { name: existing?.name ?? file.name, source };
+    libraries = existing ? libraries.map(item => item === existing ? library : item) : [...libraries, library];
+    saveLocally();
+  } catch {
+    if (currentLibraries !== libraries) return;
+    librariesMessage = 'libraryReadFailed';
+  }
+  renderLibraries();
 });
 
 const openProject = document.querySelector('#open-project');
@@ -65,6 +154,7 @@ function captureProject() {
   return createProject(
     Blockly.serialization.workspaces.save(workspace),
     manuallyEdited ? code.value : null,
+    libraries,
   );
 }
 
@@ -74,6 +164,9 @@ function applyProject(project, validate = true) {
     Blockly.serialization.workspaces.load(candidate.workspace, workspace);
     manuallyEdited = candidate.manualCode !== null;
     code.value = candidate.manualCode ?? '';
+    libraries = candidate.libraries;
+    librariesMessage = undefined;
+    renderLibraries();
     updateCode();
   };
 
@@ -167,6 +260,97 @@ async function detachSerial() {
   await session?.close();
 }
 
+function renderDeviceFiles() {
+  const listing = deviceListing?.port === serialSession?.port ? deviceListing : undefined;
+  refreshFiles.disabled = serialBusy || !navigator.serial;
+  refreshFiles.textContent = t(serialSession ? 'filesRefresh' : 'filesConnect');
+  addFile.disabled = serialBusy || !listing;
+  filesParent.hidden = !listing || listing.path === '/';
+  filesParent.disabled = serialBusy;
+  filesPath.textContent = listing?.path ?? '';
+  filesStatus.textContent = filesBusy ? t('filesBusy')
+    : filesMessage ? t(...filesMessage)
+    : !navigator.serial ? t('filesUnsupported')
+    : listing?.entries.length === 0 ? t('filesEmpty') : '';
+  fileList.replaceChildren();
+
+  for (const entry of listing?.entries ?? []) {
+    const row = document.createElement('li');
+    const path = `${listing.path.replace(/\/$/, '')}/${entry.name}`;
+    const name = document.createElement(entry.directory ? 'button' : 'span');
+    name.textContent = entry.directory ? `${entry.name}/` : entry.name;
+    row.append(name);
+    if (entry.directory) {
+      name.type = 'button';
+      name.disabled = serialBusy;
+      name.addEventListener('click', () => accessDeviceFiles(path));
+    } else {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.disabled = serialBusy;
+      remove.textContent = t('filesDelete');
+      remove.setAttribute('aria-label', t('filesDeleteConfirm', path));
+      remove.addEventListener('click', () => {
+        if (window.confirm(t('filesDeleteConfirm', path))) {
+          void accessDeviceFiles(listing.path, { type: 'delete', path });
+        }
+      });
+      row.append(remove);
+    }
+    fileList.append(row);
+  }
+}
+
+async function accessDeviceFiles(path, action) {
+  if (serialBusy || !navigator.serial) return;
+  filesBusy = serialBusy = true;
+  filesMessage = undefined;
+  updateButtons();
+  try {
+    const port = serialSession?.port ?? await navigator.serial.requestPort();
+    const command = action?.type === 'upload'
+      ? { type: 'upload', name: action.file.name, bytes: new Uint8Array(await action.file.arrayBuffer()) }
+      : action;
+    await detachSerial();
+    setSerialStatus('serialConnecting');
+    const { session, result } = await manageDeviceFiles(port, path, command, appendSerialOutput);
+    attachSerial(session);
+    if (result.error) throw result.error;
+    deviceListing = {
+      port, path,
+      entries: result.entries.sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name)),
+    };
+  } catch (error) {
+    if (!serialSession) {
+      deviceListing = undefined;
+      setSerialStatus('serialDisconnected');
+    }
+    if (error.name === 'NotFoundError') filesMessage = ['portCanceled'];
+    else filesMessage = ['filesFailed', error instanceof MicroPythonError ? t(error.code) : error.message];
+  } finally {
+    filesBusy = serialBusy = false;
+    updateButtons();
+  }
+}
+
+refreshFiles.addEventListener('click', () => {
+  const path = deviceListing?.port === serialSession?.port ? deviceListing?.path : undefined;
+  void accessDeviceFiles(path ?? '/');
+});
+filesParent.addEventListener('click', () => {
+  if (!deviceListing) return;
+  const parent = deviceListing.path.slice(0, deviceListing.path.lastIndexOf('/')) || '/';
+  void accessDeviceFiles(parent);
+});
+addFile.addEventListener('click', () => localDeviceFile.click());
+localDeviceFile.addEventListener('change', () => {
+  const file = localDeviceFile.files[0];
+  localDeviceFile.value = '';
+  if (file && deviceListing && deviceListing.port === serialSession?.port) {
+    void accessDeviceFiles(deviceListing.path, { type: 'upload', file });
+  }
+});
+
 function renderLanguage() {
   document.documentElement.lang = language;
   document.querySelectorAll('[data-i18n]').forEach(element => {
@@ -178,6 +362,8 @@ function renderLanguage() {
   renderStatus(uploadStatus, uploadMessage);
   renderStatus(serialStatus, serialMessage);
   setProjectStatus(projectMessage);
+  renderLibraries();
+  renderDeviceFiles();
 }
 
 window.setLanguage = (requested, { persist = true } = {}) => {
@@ -188,6 +374,7 @@ window.setLanguage = (requested, { persist = true } = {}) => {
     language = nextLanguage;
     applyLanguage(language);
     workspace.updateToolbox(createToolbox());
+    syncToolboxPanels();
     Blockly.serialization.workspaces.load(state, workspace);
     renderLanguage();
     updateCode();
@@ -203,6 +390,7 @@ function updateButtons() {
   serialConnect.textContent = t(serialSession ? 'serialDisconnect' : 'serialConnect');
   codeSync.hidden = !manuallyEdited;
   useBlockCode.disabled = generatedCode === null;
+  renderDeviceFiles();
 }
 
 function updateCode() {
@@ -247,7 +435,10 @@ workspace.addChangeListener(event => {
 window.addEventListener('pagehide', () => {
   if (autosaveTimer !== undefined) saveLocally();
 });
-new ResizeObserver(() => Blockly.svgResize(workspace)).observe(document.querySelector('#workspace'));
+new ResizeObserver(() => {
+  Blockly.svgResize(workspace);
+  syncToolboxPanels();
+}).observe(document.querySelector('#workspace'));
 renderLanguage();
 
 function downloadFile(content, type, filename) {
@@ -310,6 +501,7 @@ serialConnect.addEventListener('click', async () => {
 
 upload.addEventListener('click', async () => {
   const source = code.value;
+  const projectLibraries = libraries;
   serialBusy = true;
   updateButtons();
   try {
@@ -322,7 +514,7 @@ upload.addEventListener('click', async () => {
     }
     setSerialStatus('serialConnecting');
     setUploadStatus('writingCode');
-    attachSerial(await downloadProgram(port, source, appendSerialOutput));
+    attachSerial(await downloadProgram(port, source, appendSerialOutput, projectLibraries));
     setUploadStatus('flashComplete');
   } catch (error) {
     setSerialStatus('serialDisconnected');

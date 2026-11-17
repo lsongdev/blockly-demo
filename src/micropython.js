@@ -45,7 +45,7 @@ export async function monitorPort(port, onOutput) {
   }
 }
 
-export async function downloadProgram(port, source, onOutput) {
+async function runOnBoard(port, onOutput, operation) {
   await port.open({ baudRate: 115200 });
   const decoder = new TextDecoder();
   let reader;
@@ -80,33 +80,109 @@ export async function downloadProgram(port, source, onOutput) {
       await write(command + '\x04');
       const prefix = await readUntil('OK');
       if (prefix) throw new MicroPythonError('unexpectedResponse', 'Unexpected response from MicroPython');
-      await readUntil('\x04');
+      const output = await readUntil('\x04');
       const error = await readUntil('\x04>');
-      if (error.trim()) throw new Error(error.trim());
+      if (error.trim()) throw new BoardCommandError(error.trim());
+      return output;
     }
 
     await write('\r\x03\x03\x02');
     await readUntil('>>>');
     await write('\x01');
     await readUntil('raw REPL; CTRL-B to exit\r\n>');
-    await execute("from binascii import unhexlify\nimport os\nf = open('.blockly-main.tmp', 'wb')");
-    const bytes = encoder.encode(source);
-    for (let offset = 0; offset < bytes.length; offset += 96) {
-      const chunk = bytes.slice(offset, offset + 96);
-      const hex = Array.from(chunk, byte => byte.toString(16).padStart(2, '0')).join('');
-      await execute(`assert f.write(unhexlify('${hex}')) == ${chunk.length}`);
-    }
-    await execute("f.close()\nos.rename('.blockly-main.tmp', 'main.py')");
+    const result = await operation(execute);
     await write('\x02');
     await readUntil('>>>');
     await write('\x04');
     await readUntil('MPY: soft reboot');
     writer.releaseLock();
-    return streamOutput(port, reader, decoder, onOutput, 'MPY: soft reboot' + pending);
+    const session = streamOutput(port, reader, decoder, onOutput, 'MPY: soft reboot' + pending);
+    return { session, result };
   } catch (error) {
     writer?.releaseLock();
     reader?.releaseLock();
     await port.close().catch(() => {});
     throw error;
   }
+}
+
+class BoardCommandError extends Error {}
+
+function toHex(bytes) {
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function boardPath(path) {
+  return `unhexlify('${toHex(encoder.encode(path))}').decode()`;
+}
+
+async function writeBoardFile(execute, path, bytes, { replace = false } = {}) {
+  const directory = path.slice(0, path.lastIndexOf('/')) || '/';
+  const name = path.split('/').at(-1);
+  const temporary = `${directory.replace(/\/$/, '')}/.blockly-${crypto.randomUUID()}.tmp`;
+  if (!replace) {
+    await execute(`assert ${boardPath(name)} not in os.listdir(${boardPath(directory)}), 'File already exists'`);
+  }
+  await execute(`f = open(${boardPath(temporary)}, 'wb')`);
+  try {
+    for (let offset = 0; offset < bytes.length; offset += 96) {
+      const chunk = bytes.subarray(offset, offset + 96);
+      await execute(`assert f.write(unhexlify('${toHex(chunk)}')) == ${chunk.length}`);
+    }
+    await execute(`f.close()\nos.rename(${boardPath(temporary)}, ${boardPath(path)})`);
+  } catch (error) {
+    if (error instanceof BoardCommandError) {
+      await execute(`f.close()\nos.remove(${boardPath(temporary)})`).catch(() => {});
+    }
+    throw error;
+  }
+}
+
+export async function downloadProgram(port, source, onOutput, libraries = []) {
+  const { session } = await runOnBoard(port, onOutput, async execute => {
+    await execute('from binascii import unhexlify\nimport os');
+    if (libraries.length) {
+      const output = await execute(`import sys, json
+paths = [p for p in sys.path if p.endswith('/lib') and not p.startswith('/rom')]
+assert paths, 'No writable library directory in sys.path'
+library_dir = paths[0]
+try:
+    os.stat(library_dir)
+except OSError:
+    os.mkdir(library_dir)
+print(json.dumps(library_dir))`);
+      const directory = JSON.parse(output);
+      for (const { name, source } of libraries) {
+        try {
+          await writeBoardFile(execute, `${directory}/${name}`, encoder.encode(source), { replace: true });
+        } catch (error) {
+          throw new Error(`${name}: ${error.message}`, { cause: error });
+        }
+      }
+    }
+    await writeBoardFile(execute, 'main.py', encoder.encode(source), { replace: true });
+  });
+  return session;
+}
+
+export function manageDeviceFiles(port, directory, action, onOutput) {
+  return runOnBoard(port, onOutput, async execute => {
+    try {
+      await execute('from binascii import unhexlify\nimport os, json');
+      if (action?.type === 'upload') {
+        if (!action.name || /[/\\\x00-\x1f]/.test(action.name) || ['.', '..'].includes(action.name)) {
+          throw new BoardCommandError('Invalid file name');
+        }
+        const path = `${directory.replace(/\/$/, '')}/${action.name}`;
+        await writeBoardFile(execute, path, action.bytes);
+      } else if (action?.type === 'delete') {
+        await execute(`os.remove(${boardPath(action.path)})`);
+      }
+      const output = await execute(`print(json.dumps([(entry[0], entry[1]) for entry in os.ilistdir(${boardPath(directory)})]))`);
+      return { entries: JSON.parse(output).map(([name, mode]) => ({ name, directory: (mode & 0xf000) === 0x4000 })) };
+    } catch (error) {
+      if (!(error instanceof BoardCommandError)) throw error;
+      return { error };
+    }
+  });
 }

@@ -147,3 +147,32 @@ button:disabled { opacity: .45; cursor: default; }
   #workspace .blocklyToolbox { width: 142px; }
   #workspace .blocklyTreeRowContentContainer { gap: 7px; padding-inline: 6px; }
 }
+
+
+.toolbox-panel {
+  position: absolute;
+  z-index: 10;
+  inset-block: 0;
+  left: var(--toolbox-width);
+  width: min(var(--panel-width, 220px), calc(100% - var(--toolbox-width)));
+  padding: 12px;
+  overflow: auto;
+  background: color-mix(in srgb, var(--flyout-fill, #ddd) calc(var(--flyout-opacity, .8) * 100%), transparent);
+  border-radius: 0 8px 8px 0;
+}
+
+.toolbox-panel button { background: #eee9ff; color: #473779; font-size: .8125rem; padding: 6px 8px; }
+.device-files-actions, .device-files-directory { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.device-files-note, #device-files-status { font-size: .8125rem; overflow-wrap: anywhere; }
+#device-files-status:empty { display: none; }
+#files-path { overflow-wrap: anywhere; }
+#device-file-list { list-style: none; padding: 0; margin: 8px 0 0; }
+#device-file-list li { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding-block: 5px; font-size: .875rem; overflow-wrap: anywhere; }
+
+#libraries-panel { --panel-width: 340px; }
+#libraries-panel h3 { margin: 0; font-size: 1rem; }
+#libraries-panel p { font-size: .875rem; }
+#libraries-status:empty { display: none; }
+#library-list { list-style: none; padding: 0; margin: 8px 0 0; }
+#library-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-block: 5px; }
+#library-list code { overflow-wrap: anywhere; }

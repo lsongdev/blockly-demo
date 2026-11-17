@@ -26,6 +26,25 @@ const colorField = (...options) => ({ type: 'field_dropdown', name: 'COLOR', opt
 
 common.defineBlocksWithJsonArray([
   {
+    type: 'matrixbit_buzzer_tone',
+    message0: blockMessage('matrixBuzzerTone'),
+    args0: ['FREQ', 'DURATION'].map(name => ({ ...value(name), check: 'Number' })),
+    tooltip: blockMessage('matrixBuzzerHint'),
+    inputsInline: true,
+    ...statement,
+  },
+  {
+    type: 'matrixbit_rgb_set',
+    message0: blockMessage('matrixRgbSet'),
+    args0: [
+      { type: 'field_dropdown', name: 'LED', options: [['1', '0'], ['2', '1'], ['3', '2']] },
+      ...['RED', 'GREEN', 'BLUE'].map(name => ({ ...value(name), check: 'Number' })),
+    ],
+    tooltip: blockMessage('matrixRgbHint'),
+    inputsInline: true,
+    ...statement,
+  },
+  {
     type: 'matrixbit_oled_text',
     message0: blockMessage('oledText'),
     args0: [value('TEXT'), value('X'), value('Y')],
@@ -69,7 +88,8 @@ common.defineBlocksWithJsonArray([
 
 pythonGenerator.addReservedWords(
   '_matrixbit_i2c_type,_matrixbit_pin,_matrixbit_framebuf,_matrixbit_i2c,_matrixbit_pixels,' +
-  '_matrixbit_screen,_matrixbit_flush,_matrixbit_button_a,_matrixbit_button_b',
+  '_matrixbit_screen,_matrixbit_flush,_matrixbit_button_a,_matrixbit_button_b,_matrixbit_rgb,_matrixbit_neopixel,' +
+  '_matrixbit_pwm,_matrixbit_sleep_ms,_matrixbit_buzzer_tone',
 );
 
 const pinImport = 'from machine import Pin as _matrixbit_pin';
@@ -100,6 +120,30 @@ function pressedExpression(block, generator) {
 }
 
 Object.assign(pythonGenerator.forBlock, {
+  matrixbit_buzzer_tone: (block, generator) => {
+    generator.definitions_.import_matrixbit_pin = pinImport;
+    generator.definitions_.import_matrixbit_pwm = 'from machine import PWM as _matrixbit_pwm';
+    generator.definitions_.import_matrixbit_sleep = 'from time import sleep_ms as _matrixbit_sleep_ms';
+    // Matrix:bit V2.0 pinout reported by TavIR.
+    generator.definitions_.matrixbit_buzzer = `def _matrixbit_buzzer_tone(frequency, duration):
+    buzzer = _matrixbit_pwm(_matrixbit_pin(16), freq=frequency, duty_u16=32768)
+    try:
+        _matrixbit_sleep_ms(duration)
+    finally:
+        buzzer.duty_u16(0)
+        buzzer.deinit()`;
+    const frequency = generator.valueToCode(block, 'FREQ', Order.NONE) || '440';
+    const duration = generator.valueToCode(block, 'DURATION', Order.NONE) || '200';
+    return `_matrixbit_buzzer_tone(${frequency}, ${duration})\n`;
+  },
+  matrixbit_rgb_set: (block, generator) => {
+    generator.definitions_.import_matrixbit_pin = pinImport;
+    generator.definitions_.import_matrixbit_neopixel = 'from neopixel import NeoPixel as _matrixbit_neopixel';
+    generator.definitions_.matrixbit_rgb = '_matrixbit_rgb = _matrixbit_neopixel(_matrixbit_pin(17), 3)';
+    const index = block.getFieldValue('LED');
+    const rgb = ['RED', 'GREEN', 'BLUE'].map(name => generator.valueToCode(block, name, Order.NONE) || '0');
+    return `_matrixbit_rgb[${index}] = (${rgb.join(', ')})\n_matrixbit_rgb.write()\n`;
+  },
   matrixbit_button_is_pressed: (block, generator) => [pressedExpression(block, generator), Order.RELATIONAL],
   matrixbit_on_button_pressed: (block, generator) =>
     buttonEventCode(block, generator, `matrixbit_${block.getFieldValue('BUTTON')}`, pressedExpression(block, generator), 25),

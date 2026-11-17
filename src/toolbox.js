@@ -1,6 +1,6 @@
-import { CollapsibleToolboxCategory, registry, ToolboxCategory } from 'blockly/core';
+import { CollapsibleToolboxCategory, registry, Toolbox, ToolboxCategory } from 'blockly/core';
 import {
-  faCode, faCalculator, faCodeBranch, faCube, faEquals, faFont, faListUl, faMicrochip, faRotateRight, faDisplay, faWifi, faPlug, faHandPointer, faClock,
+  faCode, faCalculator, faCodeBranch, faCube, faEquals, faFont, faListUl, faMicrochip, faRotateRight, faDisplay, faWifi, faPlug, faHandPointer, faClock, faFolderOpen, faBook, faWaveSquare, faLightbulb, faVolumeHigh, faRightLeft,
 } from '@fortawesome/free-solid-svg-icons';
 import { t } from './i18n.js';
 
@@ -29,6 +29,15 @@ class IconCategoryGroup extends CollapsibleToolboxCategory {
     const icon = super.createIconDom_();
     icon.style.removeProperty('display');
     return addIcon(icon, this.toolboxItemDef_.icon, this.colour_);
+  }
+}
+
+export class EditorToolbox extends Toolbox {
+  onTreeBlur(nextTree) {
+    const selected = this.getSelectedItem()?.getId();
+    // The HTML controls and native file picker take focus outside Blockly.
+    if (selected === 'files' || selected === 'libraries') return;
+    super.onTreeBlur(nextTree);
   }
 }
 
@@ -101,6 +110,59 @@ export function createToolbox() {
         { type: 'gpio_read_adc', inputs: { PIN: numberInput(0) } },
         { type: 'gpio_on_edge', inputs: { PIN: numberInput(0) } },
       ]),
+      category('PWM', '#29806c', faWaveSquare, [
+        { type: 'pwm_create', inputs: { PIN: numberInput(0), FREQ: numberInput(440), DUTY: numberInput(0) } },
+        { type: 'pwm_frequency', inputs: { FREQ: numberInput(440) } },
+        { type: 'pwm_duty', inputs: { DUTY: numberInput(32768) } },
+        'pwm_stop',
+      ]),
+      category(t('neopixelCategory'), '#864ba0', faLightbulb, [
+        { type: 'neopixel_create', inputs: { PIN: numberInput(0), COUNT: numberInput(1) } },
+        { type: 'neopixel_set', inputs: { INDEX: numberInput(0), RED: numberInput(32), GREEN: numberInput(0), BLUE: numberInput(0) } },
+        { type: 'neopixel_fill', inputs: { RED: numberInput(0), GREEN: numberInput(0), BLUE: numberInput(0) } },
+        'neopixel_write',
+      ]),
+      category('I2C', '#298477', faCodeBranch, [
+        { type: 'i2c_create', inputs: { ID: numberInput(0), SCL: numberInput(22), SDA: numberInput(23), FREQ: numberInput(100000) } },
+        'i2c_scan',
+        { type: 'i2c_read', inputs: { ADDRESS: numberInput(60), COUNT: numberInput(1) } },
+        { type: 'i2c_write', inputs: { ADDRESS: numberInput(60) } },
+        { type: 'i2c_read_register', inputs: { ADDRESS: numberInput(60), REGISTER: numberInput(0), COUNT: numberInput(1) } },
+        { type: 'i2c_write_register', inputs: { ADDRESS: numberInput(60), REGISTER: numberInput(0) } },
+      ]),
+      category('UART', '#3575a6', faRightLeft, [
+        { type: 'uart_create', inputs: {
+          ID: numberInput(1), TX: numberInput(25), RX: numberInput(26), BAUD: numberInput(9600), TIMEOUT: numberInput(100),
+        } },
+        'uart_any',
+        { type: 'uart_read', inputs: { COUNT: numberInput(1) } },
+        'uart_read_line',
+        { type: 'uart_write', inputs: { DATA: textInput('Hello') } },
+        'uart_close',
+      ]),
+      category(t('wifiCategory'), '#357d82', faWifi, [
+        {
+          type: 'matrixbit_wifi_connect',
+          inputs: { SSID: textInput('SSID'), PASSWORD: textInput('') },
+        },
+        'matrixbit_wifi_connected', 'matrixbit_wifi_ipv4', 'matrixbit_wifi_disconnect',
+      ]),
+      {
+        kind: 'iconCategory',
+        toolboxitemid: 'files',
+        name: t('files'),
+        icon: faFolderOpen,
+        colour: '#65528e',
+        contents: [],
+      },
+      {
+        kind: 'iconCategory',
+        toolboxitemid: 'libraries',
+        name: t('libraries'),
+        icon: faBook,
+        colour: '#65528e',
+        contents: [],
+      },
       {
         kind: 'iconCategoryGroup',
         icon: faMicrochip,
@@ -137,14 +199,13 @@ export function createToolbox() {
             { type: 'matrixbit_oled_pixel', inputs: { X: numberInput(0), Y: numberInput(0) } },
             'matrixbit_oled_clear', 'matrixbit_oled_flush',
           ]),
-          category(t('buttons'), '#745ba5', faHandPointer, ['matrixbit_on_button_pressed', 'matrixbit_button_is_pressed']),
-          category('Wi-Fi', '#357d82', faWifi, [
-            {
-              type: 'matrixbit_wifi_connect',
-              inputs: { SSID: textInput('SSID'), PASSWORD: textInput('') },
-            },
-            'matrixbit_wifi_connected', 'matrixbit_wifi_ipv4', 'matrixbit_wifi_disconnect',
+          category('RGB', '#864ba0', faLightbulb, [
+            { type: 'matrixbit_rgb_set', inputs: { RED: numberInput(32), GREEN: numberInput(0), BLUE: numberInput(0) } },
           ]),
+          category(t('buzzer'), '#745ba5', faVolumeHigh, [
+            { type: 'matrixbit_buzzer_tone', inputs: { FREQ: numberInput(440), DURATION: numberInput(200) } },
+          ]),
+          category(t('buttons'), '#745ba5', faHandPointer, ['matrixbit_on_button_pressed', 'matrixbit_button_is_pressed']),
         ],
       },
     ],

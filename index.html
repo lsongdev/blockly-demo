@@ -17,7 +17,30 @@
         </div>
         <input id="project-file" type="file" accept=".json,application/json" hidden>
         <p id="project-status" role="status"></p>
-        <div id="workspace"></div>
+        <div id="workspace">
+          <section id="files-panel" class="toolbox-panel" aria-label="Files" hidden>
+            <div class="device-files-actions">
+              <button id="refresh-files" type="button"></button>
+              <button id="add-file" type="button" data-i18n="addFile" disabled>Add File</button>
+            </div>
+            <input id="local-device-file" type="file" hidden>
+            <p class="device-files-note" data-i18n="deviceFilesNote">File operations interrupt and restart the board program.</p>
+            <p id="device-files-status" role="status"></p>
+            <div class="device-files-directory">
+              <button id="files-parent" type="button" data-i18n="filesParent" hidden>Up</button>
+              <code id="files-path"></code>
+            </div>
+            <ul id="device-file-list"></ul>
+          </section>
+          <section id="libraries-panel" class="toolbox-panel" aria-labelledby="libraries-title" hidden>
+            <h3 id="libraries-title" data-i18n="libraries">Libraries</h3>
+            <p data-i18n="librariesNote">Python modules saved with this project and uploaded when you flash.</p>
+            <button id="add-library" type="button" data-i18n="addLibrary">Add .py File</button>
+            <input id="library-file" type="file" accept=".py" hidden>
+            <p id="libraries-status" role="status"></p>
+            <ul id="library-list"></ul>
+          </section>
+        </div>
       </section>
       <section class="panel" aria-labelledby="code-label">
         <div class="panel-heading">
