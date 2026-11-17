@@ -76,7 +76,7 @@ button:disabled { opacity: .45; cursor: default; }
 }
 
 #workspace .blocklyToolbox {
-  width: 156px;
+  width: clamp(156px, 17vw, 260px);
   padding: 6px 0;
   background: #f7f7fa;
   border-inline-end: 1px solid #dedde7;
@@ -113,15 +113,16 @@ button:disabled { opacity: .45; cursor: default; }
   position: absolute;
   inset-inline-end: 6px;
   top: 50%;
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
   translate: 0 -50%;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(-45deg);
+  background: currentColor;
+  clip-path: polygon(30% 0, 80% 50%, 30% 100%, 15% 85%, 50% 50%, 15% 15%);
 }
 
-#workspace .blocklyToolboxCategoryIconOpen::after { transform: rotate(45deg); }
+#workspace .blocklyToolboxCategoryIconOpen::after {
+  clip-path: polygon(0 30%, 15% 15%, 50% 50%, 85% 15%, 100% 30%, 50% 85%);
+}
 
 #workspace .blocklyToolboxCategoryIcon svg {
   display: block;
@@ -140,7 +141,7 @@ button:disabled { opacity: .45; cursor: default; }
 }
 
 #workspace .blocklyToolboxSelected svg { fill: white; }
-#workspace .blocklyToolboxSelected .blocklyToolboxCategoryIcon::after { border-color: white; }
+#workspace .blocklyToolboxSelected .blocklyToolboxCategoryIcon::after { background: white; }
 #workspace .blocklyToolboxCategory:not(.blocklyToolboxSelected):hover { background: #e9e8f0; }
 
 @media (max-width: 760px) {

@@ -117,22 +117,32 @@ function boardPath(path) {
 }
 
 async function writeBoardFile(execute, path, bytes, { replace = false } = {}) {
-  const directory = path.slice(0, path.lastIndexOf('/')) || '/';
-  const name = path.split('/').at(-1);
-  const temporary = `${directory.replace(/\/$/, '')}/.blockly-${crypto.randomUUID()}.tmp`;
+  const separator = path.lastIndexOf('/') + 1;
+  const prefix = path.slice(0, separator);
+  const directory = prefix || '.';
+  const name = path.slice(separator);
+  const temporary = `${prefix}.blockly-${crypto.randomUUID()}.tmp`;
   if (!replace) {
     await execute(`assert ${boardPath(name)} not in os.listdir(${boardPath(directory)}), 'File already exists'`);
   }
-  await execute(`f = open(${boardPath(temporary)}, 'wb')`);
+  let stage = 'open temporary file';
+  let opened = false;
   try {
+    await execute(`f = open(${boardPath(temporary)}, 'wb')`);
+    opened = true;
+    stage = 'write temporary file';
     for (let offset = 0; offset < bytes.length; offset += 96) {
       const chunk = bytes.subarray(offset, offset + 96);
       await execute(`assert f.write(unhexlify('${toHex(chunk)}')) == ${chunk.length}`);
     }
+    stage = 'rename temporary file';
     await execute(`f.close()\nos.rename(${boardPath(temporary)}, ${boardPath(path)})`);
   } catch (error) {
     if (error instanceof BoardCommandError) {
-      await execute(`f.close()\nos.remove(${boardPath(temporary)})`).catch(() => {});
+      if (opened) {
+        await execute(`f.close()\nos.remove(${boardPath(temporary)})`).catch(() => {});
+      }
+      throw new BoardCommandError(`${path} (${stage}): ${error.message}`);
     }
     throw error;
   }
@@ -153,11 +163,7 @@ except OSError:
 print(json.dumps(library_dir))`);
       const directory = JSON.parse(output);
       for (const { name, source } of libraries) {
-        try {
-          await writeBoardFile(execute, `${directory}/${name}`, encoder.encode(source), { replace: true });
-        } catch (error) {
-          throw new Error(`${name}: ${error.message}`, { cause: error });
-        }
+        await writeBoardFile(execute, `${directory}/${name}`, encoder.encode(source), { replace: true });
       }
     }
     await writeBoardFile(execute, 'main.py', encoder.encode(source), { replace: true });
