@@ -7,29 +7,40 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; padding: 12px; height: 100dvh; display: flex; flex-direction: column; }
-.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 64px; padding: 10px 12px; border-bottom: 1px solid #dcd9ed; }
 h1, h2 { font-size: 1rem; margin: 0; }
 main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(270px, 340px); gap: 12px; }
-aside { display: grid; gap: 12px; align-content: start; min-width: 0; overflow: auto; }
-.panel, .editor { background: #fff; border: 1px solid #dcd9ed; border-radius: 16px; overflow: hidden; }
-.editor { display: flex; flex-direction: column; min-height: 0; }
-.panel, .workspace-heading { padding: 12px 16px; }
+.panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #fff; border: 1px solid #dcd9ed; border-radius: 16px; overflow: hidden; }
 #workspace { position: relative; flex: 1; min-height: 0; }
-button { cursor: pointer; border: 0; border-radius: 9px; padding: 10px 14px; font: inherit; font-weight: 650; }
+button { cursor: pointer; border: 0; border-radius: 9px; padding: 10px 12px; font: inherit; font-weight: 650; }
 button:focus-visible { outline: 3px solid #8979d1; outline-offset: 3px; }
-#run { color: white; background: #55448c; }
+#upload { color: white; background: #55448c; }
+.code-actions { display: flex; gap: 6px; }
+#upload-status, #code-error { margin: 0; padding: 8px 12px; font-size: .875rem; overflow-wrap: anywhere; }
+#code-error { color: #9c2938; }
+#upload-status:empty, #code-error:empty { display: none; }
 #download { background: #eee9ff; color: #473779; }
 button:disabled { opacity: .45; cursor: default; }
-#matrix { margin: 18px auto 12px; width: max-content; display: grid; grid-template-columns: repeat(5, 18px); gap: 8px; padding: 22px; border-radius: 16px; background: #232035; }
-#matrix span { width: 18px; height: 18px; border-radius: 5px; background: #403c53; }
-#matrix .lit { background: #ff648b; box-shadow: 0 0 8px #ff648b90; }
-#status { min-height: 1.25em; margin-bottom: 0; font-size: .875rem; color: #514a67; text-align: center; }
-pre { padding: 12px; margin-bottom: 0; min-height: 90px; overflow: auto; background: #f5f3fa; border-radius: 9px; }
+.code-sync { padding: 4px 12px 8px; text-align: right; }
+.code-sync button { padding: 6px 8px; background: #eee9ff; color: #473779; font-size: .875rem; }
+#python {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 12px;
+  border: 0;
+  resize: none;
+  background: #f5f3fa;
+  color: inherit;
+  font: .875rem/1.5 "IBM Plex Mono", ui-monospace, monospace;
+  tab-size: 4;
+}
+#python:focus-visible { outline: 2px solid #8979d1; outline-offset: -2px; }
 
 @media (max-width: 760px) {
   body { height: auto; min-height: 100dvh; }
   main { grid-template-columns: minmax(0, 1fr); }
-  .editor { min-height: 58dvh; }
+  .panel { height: 58dvh; }
 }
 
 #workspace .blocklyToolbox {
@@ -46,6 +57,7 @@ pre { padding: 12px; margin-bottom: 0; min-height: 90px; overflow: auto; backgro
 }
 
 #workspace .blocklyTreeRowContentContainer {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -63,11 +75,28 @@ pre { padding: 12px; margin-bottom: 0; min-height: 90px; overflow: auto; backgro
   background: none;
 }
 
+#workspace .blocklyToolboxCategoryIconClosed::after,
+#workspace .blocklyToolboxCategoryIconOpen::after {
+  content: "";
+  position: absolute;
+  inset-inline-end: 6px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  translate: 0 -50%;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+#workspace .blocklyToolboxCategoryIconOpen::after { transform: rotate(45deg); }
+
 #workspace .blocklyToolboxCategoryIcon svg {
   display: block;
   margin-inline: auto;
   width: 17px;
   height: 17px;
+  flex-shrink: 0;
   fill: currentColor;
 }
 
@@ -79,9 +108,10 @@ pre { padding: 12px; margin-bottom: 0; min-height: 90px; overflow: auto; backgro
 }
 
 #workspace .blocklyToolboxSelected svg { fill: white; }
+#workspace .blocklyToolboxSelected .blocklyToolboxCategoryIcon::after { border-color: white; }
 #workspace .blocklyToolboxCategory:not(.blocklyToolboxSelected):hover { background: #e9e8f0; }
 
 @media (max-width: 760px) {
-  #workspace .blocklyToolbox { width: 108px; }
+  #workspace .blocklyToolbox { width: 142px; }
   #workspace .blocklyTreeRowContentContainer { gap: 7px; padding-inline: 6px; }
 }

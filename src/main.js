@@ -1,128 +1,146 @@
 import * as Blockly from 'blockly/core';
 import 'blockly/blocks';
-import { javascriptGenerator } from 'blockly/javascript';
 import { pythonGenerator } from 'blockly/python';
-import * as ZhHans from 'blockly/msg/zh-hans';
-import { toolbox } from './toolbox.js';
+import { createToolbox } from './toolbox.js';
+import { applyLanguage, getSavedLanguage, normalizeLanguage, saveLanguage, t } from './i18n.js';
+import { PythonBlockError } from './python-blocks.js';
+import './matrixbit.js';
+import './matrixbit-wifi.js';
+import './microbit.js';
+import { example } from './example.js';
+import { downloadProgram, MicroPythonError } from './micropython.js';
 import './style.css';
 
-Blockly.setLocale(ZhHans);
-
-const images = {
-  HAPPY: { label: '笑脸', pixels: ['00000', '09090', '00000', '90009', '09990'] },
-  HEART: { label: '爱心', pixels: ['09090', '99999', '99999', '09990', '00900'] },
-};
-
-Blockly.common.defineBlocksWithJsonArray([
-  {
-    type: 'display_image',
-    message0: '显示 %1',
-    args0: [{
-      type: 'field_dropdown',
-      name: 'IMAGE',
-      options: Object.entries(images).map(([id, image]) => [image.label, id]),
-    }],
-    previousStatement: null,
-    nextStatement: null,
-    colour: 260,
-  },
-  {
-    type: 'display_clear',
-    message0: '清空点阵',
-    previousStatement: null,
-    nextStatement: null,
-    colour: 260,
-  },
-]);
-
-pythonGenerator.forBlock.display_image = (block, generator) => {
-  generator.definitions_.import_microbit = 'from microbit import display, Image';
-  return `display.show(Image.${block.getFieldValue('IMAGE')})\n`;
-};
-
-pythonGenerator.forBlock.display_clear = (_block, generator) => {
-  generator.definitions_.import_microbit = 'from microbit import display, Image';
-  return 'display.clear()\n';
-};
-
-javascriptGenerator.addReservedWords('previewDisplay');
-javascriptGenerator.forBlock.display_image = (block) =>
-  `previewDisplay(${JSON.stringify(block.getFieldValue('IMAGE'))});\n`;
-javascriptGenerator.forBlock.display_clear = () => 'previewDisplay(null);\n';
+let language = getSavedLanguage();
+applyLanguage(language);
 
 const workspace = Blockly.inject('workspace', {
-  toolbox,
+  toolbox: createToolbox(),
   trashcan: true,
   scrollbars: true,
   grid: { spacing: 24, length: 2, colour: '#b8bcd2' },
 });
 
-Blockly.serialization.workspaces.load({
-  blocks: { languageVersion: 0, blocks: [{ type: 'display_image', x: 42, y: 42 }] },
-}, workspace);
+Blockly.serialization.workspaces.load(example, workspace);
 
 const code = document.querySelector('#python');
-const matrix = document.querySelector('#matrix');
-const status = document.querySelector('#status');
+const codeError = document.querySelector('#code-error');
+const codeSync = document.querySelector('#code-sync');
+const useBlockCode = document.querySelector('#use-block-code');
 const download = document.querySelector('#download');
-const cells = Array.from({ length: 25 }, () => document.createElement('span'));
-matrix.append(...cells);
+const upload = document.querySelector('#upload');
+const uploadStatus = document.querySelector('#upload-status');
+let uploading = false;
+let generatedCode = null;
+let manuallyEdited = false;
+let uploadMessage;
+
+function renderUploadStatus() {
+  if (!uploadMessage) return;
+  const [key, error] = uploadMessage;
+  const detail = error instanceof MicroPythonError ? t(error.code) : error?.message;
+  uploadStatus.textContent = t(key, detail);
+}
+
+function setUploadStatus(key, error) {
+  uploadMessage = [key, error];
+  renderUploadStatus();
+}
+
+function renderLanguage() {
+  document.documentElement.lang = language;
+  document.querySelectorAll('[data-i18n]').forEach(element => {
+    element.textContent = t(element.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(element => {
+    element.title = t(element.dataset.i18nTitle);
+  });
+  renderUploadStatus();
+}
+
+window.setLanguage = (requested, { persist = true } = {}) => {
+  const nextLanguage = normalizeLanguage(requested);
+  if (!nextLanguage) throw new RangeError('Supported languages: en, zh-CN.');
+  if (nextLanguage !== language) {
+    const state = Blockly.serialization.workspaces.save(workspace);
+    language = nextLanguage;
+    applyLanguage(language);
+    workspace.updateToolbox(createToolbox());
+    Blockly.serialization.workspaces.load(state, workspace);
+    renderLanguage();
+    updateCode();
+  }
+  if (persist) saveLanguage(language);
+  return language;
+};
+
+function updateButtons() {
+  download.disabled = !code.value.trim();
+  upload.disabled = download.disabled || uploading || !navigator.serial;
+  codeSync.hidden = !manuallyEdited;
+  useBlockCode.disabled = generatedCode === null;
+}
 
 function updateCode() {
-  code.textContent = pythonGenerator.workspaceToCode(workspace);
-  download.disabled = !code.textContent.trim();
+  try {
+    generatedCode = pythonGenerator.workspaceToCode(workspace);
+    codeError.textContent = '';
+  } catch (error) {
+    if (!(error instanceof PythonBlockError)) throw error;
+    generatedCode = null;
+    codeError.textContent = error.message;
+  }
+  if (!manuallyEdited) {
+    const nextCode = generatedCode ?? '';
+    if (code.value !== nextCode) code.value = nextCode;
+  } else if (code.value === generatedCode) {
+    manuallyEdited = false;
+  }
+  updateButtons();
 }
+
+code.addEventListener('input', () => {
+  manuallyEdited = code.value !== (generatedCode ?? '');
+  updateButtons();
+});
+
+useBlockCode.addEventListener('click', () => {
+  if (generatedCode === null) return;
+  code.value = generatedCode;
+  manuallyEdited = false;
+  updateButtons();
+  code.focus();
+});
 
 workspace.addChangeListener(updateCode);
 new ResizeObserver(() => Blockly.svgResize(workspace)).observe(document.querySelector('#workspace'));
+renderLanguage();
 updateCode();
 
-function renderDisplay(image) {
-  const pixels = image?.pixels.join('') ?? '';
-  cells.forEach((cell, index) => cell.classList.toggle('lit', pixels[index] === '9'));
-  matrix.setAttribute('aria-label', image ? `点阵显示${image.label}` : '点阵已熄灭');
-  status.textContent = image ? `正在显示${image.label}` : '点阵已熄灭';
-}
-
-const run = document.querySelector('#run');
-run.addEventListener('click', () => {
-  const worker = new Worker(new URL('./preview-worker.js', import.meta.url), { type: 'module' });
-  run.disabled = true;
-  status.textContent = '正在运行…';
-
-  function finish() {
-    clearTimeout(timeout);
-    worker.terminate();
-    run.disabled = false;
-  }
-
-  const timeout = setTimeout(() => {
-    finish();
-    status.textContent = '运行超时，请检查循环或递归。';
-  }, 2000);
-
-  worker.onmessage = ({ data }) => {
-    finish();
-    if (data.error) {
-      status.textContent = `运行出错：${data.error}`;
-    } else {
-      renderDisplay(images[data.imageId]);
-    }
-  };
-
-  worker.onerror = () => {
-    finish();
-    status.textContent = '预览启动失败，请重试。';
-  };
-
-  worker.postMessage(javascriptGenerator.workspaceToCode(workspace));
-});
-
 download.addEventListener('click', () => {
-  const url = URL.createObjectURL(new Blob([code.textContent], { type: 'text/x-python' }));
+  const url = URL.createObjectURL(new Blob([code.value], { type: 'text/x-python' }));
   const link = document.createElement('a');
   link.href = url;
   link.download = 'main.py';
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+upload.addEventListener('click', async () => {
+  const source = code.value;
+  uploading = true;
+  updateButtons();
+  setUploadStatus('selectPort');
+  try {
+    const port = await navigator.serial.requestPort();
+    setUploadStatus('writingCode');
+    await downloadProgram(port, source);
+    setUploadStatus('flashComplete');
+  } catch (error) {
+    if (error.name === 'NotFoundError') setUploadStatus('portCanceled');
+    else setUploadStatus('flashFailed', error);
+  } finally {
+    uploading = false;
+    updateButtons();
+  }
 });
