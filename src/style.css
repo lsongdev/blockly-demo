@@ -16,9 +16,10 @@ button { cursor: pointer; border: 0; border-radius: 9px; padding: 10px 12px; fon
 button:focus-visible { outline: 3px solid #8979d1; outline-offset: 3px; }
 #upload { color: white; background: #55448c; }
 .code-actions { display: flex; gap: 6px; }
-#upload-status, #code-error { margin: 0; padding: 8px 12px; font-size: .875rem; overflow-wrap: anywhere; }
+.project-actions button { background: #eee9ff; color: #473779; font-size: .875rem; }
+#upload-status, #code-error, #project-status { margin: 0; padding: 8px 12px; font-size: .875rem; overflow-wrap: anywhere; }
 #code-error { color: #9c2938; }
-#upload-status:empty, #code-error:empty { display: none; }
+#upload-status:empty, #code-error:empty, #project-status:empty { display: none; }
 #download { background: #eee9ff; color: #473779; }
 button:disabled { opacity: .45; cursor: default; }
 .code-sync { padding: 4px 12px 8px; text-align: right; }

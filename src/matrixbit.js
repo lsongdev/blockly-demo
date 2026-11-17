@@ -20,19 +20,17 @@ def _matrixbit_flush():
 const statement = { previousStatement: null, nextStatement: null, colour: 260 };
 const value = name => ({ type: 'input_value', name });
 
+const white = [blockMessage('oledWhite'), '1'];
+const black = [blockMessage('oledBlack'), '0'];
+const colorField = (...options) => ({ type: 'field_dropdown', name: 'COLOR', options });
+
 common.defineBlocksWithJsonArray([
   {
     type: 'matrixbit_oled_text',
     message0: blockMessage('oledText'),
     args0: [value('TEXT'), value('X'), value('Y')],
     message1: blockMessage('oledTextOptions'),
-    args1: [
-      {
-        type: 'field_dropdown',
-        name: 'COLOR',
-        options: [[blockMessage('oledWhite'), '1'], [blockMessage('oledBlack'), '0']],
-      },
-    ],
+    args1: [colorField(white, black)],
     tooltip: blockMessage('oledTextHint'),
     inputsInline: true,
     ...statement,
@@ -49,7 +47,8 @@ common.defineBlocksWithJsonArray([
   },
   {
     type: 'matrixbit_oled_clear',
-    message0: blockMessage('oledClear'),
+    message0: blockMessage('oledFill'),
+    args0: [colorField(black, white)],
     ...statement,
   },
   {
@@ -113,7 +112,8 @@ Object.assign(pythonGenerator.forBlock, {
     const state = block.getFieldValue('STATE');
     return draw(generator, `_matrixbit_screen.pixel(${coordinates(block, generator)}, ${state})`);
   },
-  matrixbit_oled_clear: (_block, generator) => draw(generator, '_matrixbit_screen.fill(0)'),
+  matrixbit_oled_clear: (block, generator) =>
+    draw(generator, `_matrixbit_screen.fill(${block.getFieldValue('COLOR')})`),
   matrixbit_oled_flush: (_block, generator) => {
     prepareFrameBuffer(generator);
     generator.definitions_.import_matrixbit_pin = pinImport;
