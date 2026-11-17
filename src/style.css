@@ -31,3 +31,57 @@ pre { padding: 12px; margin-bottom: 0; min-height: 90px; overflow: auto; backgro
   main { grid-template-columns: minmax(0, 1fr); }
   .editor { min-height: 58dvh; }
 }
+
+#workspace .blocklyToolbox {
+  width: 156px;
+  padding: 6px 0;
+  background: #f7f7fa;
+  border-inline-end: 1px solid #dedde7;
+}
+
+#workspace .blocklyToolboxCategory {
+  height: 42px;
+  margin: 0;
+  cursor: pointer;
+}
+
+#workspace .blocklyTreeRowContentContainer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding-inline: 10px;
+}
+
+#workspace .blocklyToolboxCategoryIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  height: auto;
+  visibility: visible;
+  background: none;
+}
+
+#workspace .blocklyToolboxCategoryIcon svg {
+  display: block;
+  margin-inline: auto;
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
+}
+
+#workspace .blocklyToolboxCategoryLabel {
+  padding: 0;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+#workspace .blocklyToolboxSelected svg { fill: white; }
+#workspace .blocklyToolboxCategory:not(.blocklyToolboxSelected):hover { background: #e9e8f0; }
+
+@media (max-width: 760px) {
+  #workspace .blocklyToolbox { width: 108px; }
+  #workspace .blocklyTreeRowContentContainer { gap: 7px; padding-inline: 6px; }
+}
